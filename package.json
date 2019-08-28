@@ -4,10 +4,10 @@
     "version": "1.0.1",
     "main": "main.js",
     "keywords": [
-		"functions",
-		"parameters",
-		"arguments",
-		"parser"
+        "functions",
+        "parameters",
+        "arguments",
+        "parser"
     ],
     "homepage": "https://github.com/theLAZYmd/get-param-names/blob/master/README.md",
     "releases": "https://github.com/theLAZYmd/get-param-names/releases",
@@ -17,7 +17,9 @@
     },
     "author": "theLAZYmd",
     "license": "GNU",
-    "dependencies": {},
+    "dependencies": {
+        "strip-json-comments": "^3.0.1"
+    },
     "scripts": {
         "test": "node test.js"
     }

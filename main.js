@@ -1,3 +1,5 @@
+const strip = require('strip-json-comments');
+
 /**
  * Defined outside the constructor so that they are interpreted once and stored in memory
  * @property {regex} arrow - Used to parse arrow functions, execs arguments section
@@ -7,17 +9,17 @@
  * @property {regex} array - Finds parameters that are decomposed arrays
  * @type {Object}
  */
+
 const regex = {
 	arrow: /^\(?([\w\s,]+)\)?\s*=>/,
-	func: /(?:function|static|async)?\s*\w+\s?\(([\w\s=>"',:{}[\]\\]*)\)/,
-	comments: /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/mg,
-	object: /^{([\w\s=>"',:{}[\]\\]*)*}$/,
-	array: /^\[[\w\s=>"',:{}[\]\\]*]$/,
-	json: /\{.*:\{.*:.*\}\}/g
+	func: /(?:function|static|async)?\s*\w+\s?\(([\w\s=>"',:{}\\\/.]*)\)/,
+	comments: /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/gm,
+	object: /^{([\w\s=>"',:{}\\\/.]*)*}$/,
+	array: /^\[[\w\s=>"',:{}\\\/.]*]$/,
+	json: /\{.*:\{.*:.*\}\}/g,
 };
 
 class getParamNames {
-
 	/**
 	 * @constructor
 	 * @param {Function} f - The function for which parameter names should be returned
@@ -31,7 +33,7 @@ class getParamNames {
 	 * @returns {*[]}
 	 * @public
 	 */
-	run () {
+	run() {
 		return this.params;
 	}
 
@@ -41,9 +43,9 @@ class getParamNames {
 	 * @type {string}
 	 * @private
 	 */
-	get str () {
+	get str() {
 		if (this._str) return this._str;
-		return this._str = this.f.toString().trim();
+		return (this._str = this.f.toString().trim());
 	}
 
 	/**
@@ -51,10 +53,10 @@ class getParamNames {
 	 * @type {string}
 	 * @private
 	 */
-	get arg () {
+	get arg() {
 		if (this._arg) return this._arg;
-		if (regex.arrow.test(this.str)) return this._arg = this.str.match(regex.arrow)[1];
-		else if (regex.func.test(this.str)) return this._arg = this.str.match(regex.func)[1];
+		if (regex.arrow.test(this.str)) return (this._arg = this.str.match(regex.arrow)[1]);
+		else if (regex.func.test(this.str)) return (this._arg = this.str.match(regex.func)[1]);
 		throw new Error('Function parsing failed, review:\n' + this.str);
 	}
 
@@ -64,9 +66,19 @@ class getParamNames {
 	 * @type {string[]}
 	 * @private
 	 */
-	get sep () {
+	get sep() {
 		if (this._sep) return this._sep;
-		return this._sep = getParamNames.splitCommas(this.arg.replace(regex.comments, ''));
+
+		/* Remove comments and handle single quote strings (only accept properly formatted
+		 * json string, thus all strings must be " and not ')
+		 */
+		const stripped = strip(this.arg.replace(/'/g, '"'))
+			.replace(/"/g, "'")
+			.trim();
+
+		this._sep = getParamNames.splitCommas(stripped);
+
+		return this._sep;
 	}
 
 	/**
@@ -77,25 +89,28 @@ class getParamNames {
 	 * @type {*[]}
 	 * @private
 	 */
-	get params () {
+	get params() {
 		if (this._params) return this._params;
-		return this._params = this.sep
-			.map(i => {
-				if (i.indexOf('=') !== -1) i = getParamNames.splitEquals(i)
+
+		return (this._params = this.sep.map(i => {
+			if (i.indexOf('=') !== -1)
+				i = getParamNames
+					.splitEquals(i)
 					.slice(0, -1)
 					.join('=')
 					.trim();
-				return getParamNames.decompose(i);
-			});
+
+			return getParamNames.decompose(i);
+		}));
 	}
-	
+
 	/**
 	 * Splits a single at any '=' sign, critically ignoring any '=>' signs
 	 * @param {string} str
 	 * @returns {string[]}
 	 * @private
 	 */
-	static splitEquals (str) {
+	static splitEquals(str) {
 		return str
 			.trim()
 			.split('=')
@@ -112,15 +127,25 @@ class getParamNames {
 	 * @returns {string[]}
 	 * @private
 	 */
-	static splitCommas (str) {
+	static splitCommas(str) {
 		let obj = null;
-		let arr = str.split(',').map(i => i.trim());
+		let arr = str
+			.split(',')
+			.map(i => i.trim())
+			.filter(i => i != '');
+
 		return arr.reduce((acc, curr) => {
+			// Handle trailing commas in objects
+			if(curr != '') return acc;
+
 			if (obj) acc[acc.length - 1] += ', ' + curr.trim();
 			else acc.push(curr.trim());
+			
 			if (curr.includes('[')) obj = ']';
-			else if (curr.includes('{')) obj ='}';
+			else if (curr.includes('{')) obj = '}';
+			
 			if (curr.endsWith(obj)) obj = null;
+
 			return acc;
 		}, []);
 	}
@@ -132,37 +157,44 @@ class getParamNames {
 	 * @returns {*[]}
 	 * @private
 	 */
-	static decompose (str) {
+	static decompose(str) {
 		if (regex.object.test(str)) {
 			if (str === '{}') return {};
-			let obj = {};
+
 			const val = str.slice(1, -1).trim();
 			const entries = getParamNames.splitCommas(val);
+			let obj = {};
+
 			for (let entry of entries) {
 				let [key, value] = getParamNames.splitEquals(entry);
+
 				if (typeof value === 'undefined') [key, value] = key.split(':');
 				if (typeof value !== 'undefined') value = getParamNames.decompose(value.trim());
+
 				obj[key.trim()] = value;
 			}
+
 			return obj;
-		} else
-		if (regex.array.test(str)) {
+		} else if (regex.array.test(str)) {
 			if (str === '[]') return [];
+
 			let arr = getParamNames.splitCommas(str.slice(1, -1).trim());
+
 			for (let i = 0; i < arr.length; i++) {
 				arr[i] = getParamNames.decompose(arr[i]);
 			}
+
 			return arr;
-		} else
-		if (str.trim() === 'true') return true;
+		} else if (str.trim() === 'true') return true;
 		else if (str.trim() === 'false') return false;
+
 		str = str.replace(/'/g, '');
+
 		return str;
 	}
-
 }
 
-module.exports = (f) => {
+module.exports = f => {
 	const Instance = new getParamNames(f);
 	return Instance.run();
 };
