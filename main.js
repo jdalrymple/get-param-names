@@ -132,18 +132,17 @@ class getParamNames {
 		let arr = str
 			.split(',')
 			.map(i => i.trim())
-			.filter(i => i != '');
 
 		return arr.reduce((acc, curr) => {
 			// Handle trailing commas in objects
-			if(curr != '') return acc;
+			if (curr === '') return acc;
 
 			if (obj) acc[acc.length - 1] += ', ' + curr.trim();
 			else acc.push(curr.trim());
-			
+
 			if (curr.includes('[')) obj = ']';
 			else if (curr.includes('{')) obj = '}';
-			
+
 			if (curr.endsWith(obj)) obj = null;
 
 			return acc;
